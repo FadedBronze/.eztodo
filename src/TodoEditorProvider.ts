@@ -26,28 +26,16 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
       enableScripts: true,
     };
 
-    function updateWebview() {
-      webviewPanel.webview.postMessage({
-        type: "update",
-        text: document.getText(),
-      });
-    }
-
-    const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(
-      (e) => {
-        if (e.document.uri.toString() === document.uri.toString()) {
-          updateWebview();
-        }
-      }
-    );
-
-    webviewPanel.onDidDispose(() => {
-      changeDocumentSubscription.dispose();
+    webviewPanel.webview.onDidReceiveMessage((e) => {
+      console.log(e.newData);
+      updateTextDocument(document, e.newData);
     });
 
     webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview);
 
-    updateWebview();
+    webviewPanel.webview.postMessage({
+      text: document.getText(),
+    });
   }
 
   getHtmlForWebview(webview: vscode.Webview): string {
@@ -83,6 +71,9 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
           
           <link rel="stylesheet" href="${stylesUri}">
           <script type="module" defer src=${scriptUri}></script>
+          <script>
+            const vscode = acquireVsCodeApi();
+          </script>
         </head>
         <body>
           <div id="root"></div>
@@ -90,4 +81,18 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
       </html>
     `;
   }
+}
+
+function updateTextDocument(document: vscode.TextDocument, json: any) {
+  const edit = new vscode.WorkspaceEdit();
+
+  // Just replace the entire document every time for this example extension.
+  // A more complete extension should compute minimal edits instead.
+  edit.replace(
+    document.uri,
+    new vscode.Range(0, 0, document.lineCount, 0),
+    JSON.stringify(json, null, 2)
+  );
+
+  return vscode.workspace.applyEdit(edit);
 }
