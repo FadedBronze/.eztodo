@@ -27,15 +27,26 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
     };
 
     webviewPanel.webview.onDidReceiveMessage((e) => {
-      console.log(e.newData);
-      updateTextDocument(document, e.newData);
+      if (e.type === "ready") {
+        if (document.lineCount === 0) {
+          webviewPanel.webview.postMessage({
+            type: "load",
+            text: "",
+          });
+        }
+
+        webviewPanel.webview.postMessage({
+          type: "load",
+          text: document.getText(),
+        });
+      }
+
+      if (e.type === "update") {
+        updateTextDocument(document, e.newData);
+      }
     });
 
     webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview);
-
-    webviewPanel.webview.postMessage({
-      text: document.getText(),
-    });
   }
 
   getHtmlForWebview(webview: vscode.Webview): string {
@@ -68,7 +79,7 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
           <meta charset="UTF-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
           <title>Easy Todo</title>
-          
+
           <link rel="stylesheet" href="${stylesUri}">
           <script type="module" defer src=${scriptUri}></script>
           <script>

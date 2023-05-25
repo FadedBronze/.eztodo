@@ -1,6 +1,8 @@
 import { motion } from "framer-motion";
+import { type } from "os";
 import { useState, DragEvent, useEffect } from "react";
 import { v4 as uuid } from "uuid";
+import z from "zod";
 
 function App() {
   return (
@@ -12,55 +14,84 @@ function App() {
 
 interface vscode {
   postMessage(message: any): void;
-  getState(): { text: unknown | undefined };
 }
 
 declare const vscode: vscode;
 
 function TodoSpace() {
-  const [todoSpace, setTodoSpace] = useState<TodoSpaceData>({
-    spaceName: "my todo space",
-    lists: [
-      {
-        id: uuid(),
-        listName: "Todo",
-        todos: [{ content: "", id: uuid(), priority: 0, time: 0 }],
-      },
-      {
-        id: uuid(),
-        listName: "Doing",
-        todos: [{ content: "", id: uuid(), priority: 0, time: 0 }],
-      },
-      {
-        id: uuid(),
-        listName: "Done",
-        todos: [{ content: "", id: uuid(), priority: 0, time: 0 }],
-      },
-    ],
-  });
+  const [loaded, setLoaded] = useState(false);
+
+  const [todoSpace, setTodoSpace] = useState<TodoSpaceData>();
 
   const [draggingOverList, setDraggingOverList] = useState<string | null>();
   const [reorderLists, setReorderLists] = useState(false);
 
   useEffect(() => {
+    //hacky hack potentially dangerous hack
+    const handleNewDoc = () => {
+      setTodoSpace({
+        spaceName: "my todo space",
+        lists: [
+          {
+            id: uuid(),
+            listName: "Todo",
+            todos: [{ content: "", id: uuid(), priority: 0, time: 0 }],
+          },
+          {
+            id: uuid(),
+            listName: "Doing",
+            todos: [{ content: "", id: uuid(), priority: 0, time: 0 }],
+          },
+          {
+            id: uuid(),
+            listName: "Done",
+            todos: [{ content: "", id: uuid(), priority: 0, time: 0 }],
+          },
+        ],
+      });
+
+      setLoaded(true);
+    };
+
     const handleMessage = (e: MessageEvent) => {
-      const message = e.data;
+      if (e.data.type !== "load") return;
 
-      const data = JSON.parse(message.text);
+      const parsedMessage = TodoSpaceSchema.safeParse(JSON.parse(e.data.text));
 
-      setTodoSpace(data);
+      if (parsedMessage.success) {
+        const message = parsedMessage.data;
+
+        setTodoSpace(message);
+      } else {
+        handleNewDoc();
+      }
+
+      setLoaded(true);
     };
 
     window.addEventListener("message", handleMessage);
+
+    vscode.postMessage({
+      type: "ready",
+    });
 
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
   useEffect(() => {
-    vscode.postMessage({
-      newData: todoSpace,
-    });
-  }, [todoSpace]);
+    if (loaded) {
+      vscode.postMessage({
+        type: "update",
+        newData: todoSpace,
+      });
+    } else {
+      vscode.postMessage({
+        type: "ready",
+      });
+    }
+  }, [todoSpace, loaded]);
+
+  if (!loaded || todoSpace === undefined) return <>loading...</>;
 
   return (
     <div className="w-full h-full bg-black">
@@ -77,7 +108,7 @@ function TodoSpace() {
                 id: uuid(),
                 todos: [
                   {
-                    content: "" + vscode.getState().text,
+                    content: "",
                     priority: 0,
                     id: uuid(),
                     time: 0,
@@ -183,8 +214,6 @@ function TodoSpace() {
                 setTodoSpace(newState);
               }}
               deleteList={() => {
-                if (!confirm("Delete list? Action cannot be undone")) return;
-
                 const newState = { ...todoSpace };
 
                 const thisList = todoSpace.lists.findIndex(
@@ -258,23 +287,29 @@ function Toggle(props: {
   );
 }
 
-type TodoData = {
-  priority: number;
-  time: number;
-  content: string;
-  id: string;
-};
+const TodoSchema = z.object({
+  priority: z.number(),
+  time: z.number(),
+  content: z.string(),
+  id: z.string(),
+});
 
-type TodoListData = {
-  listName: string;
-  todos: TodoData[];
-  id: string;
-};
+type TodoData = z.infer<typeof TodoSchema>;
 
-type TodoSpaceData = {
-  spaceName: string;
-  lists: TodoListData[];
-};
+const TodoListSchema = z.object({
+  listName: z.string(),
+  todos: z.array(TodoSchema),
+  id: z.string(),
+});
+
+type TodoListData = z.infer<typeof TodoListSchema>;
+
+const TodoSpaceSchema = z.object({
+  spaceName: z.string(),
+  lists: z.array(TodoListSchema),
+});
+
+type TodoSpaceData = z.infer<typeof TodoSpaceSchema>;
 
 function TodoList(props: {
   listData: TodoListData;
@@ -535,9 +570,7 @@ function Todo(props: {
       </div>
       <button
         onClick={() => {
-          if (confirm("delete todo?")) {
-            deleteTodo();
-          }
+          deleteTodo();
         }}
         className="text-sm justify-center items-center flex p-2 bg-red-400 rounded-md font-semibold text-white"
       >
