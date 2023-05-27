@@ -28,13 +28,6 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
 
     webviewPanel.webview.onDidReceiveMessage((e) => {
       if (e.type === "ready") {
-        if (document.lineCount === 0) {
-          webviewPanel.webview.postMessage({
-            type: "load",
-            text: "",
-          });
-        }
-
         webviewPanel.webview.postMessage({
           type: "load",
           text: document.getText(),
@@ -43,6 +36,15 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
 
       if (e.type === "update") {
         updateTextDocument(document, e.newData);
+      }
+    });
+
+    vscode.workspace.onDidChangeTextDocument(() => {
+      if (document.lineCount === 0) {
+        webviewPanel.webview.postMessage({
+          type: "update",
+          text: document.getText(),
+        });
       }
     });
 

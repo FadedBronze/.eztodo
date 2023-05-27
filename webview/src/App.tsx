@@ -1,5 +1,4 @@
 import { motion } from "framer-motion";
-import { type } from "os";
 import { useState, DragEvent, useEffect } from "react";
 import { v4 as uuid } from "uuid";
 import z from "zod";
@@ -21,40 +20,39 @@ declare const vscode: vscode;
 function TodoSpace() {
   const [loaded, setLoaded] = useState(false);
 
-  const [todoSpace, setTodoSpace] = useState<TodoSpaceData>();
+  const [todoSpace, setTodoSpace] = useState<TodoSpaceData>({
+    spaceName: "my todo space",
+    lists: [
+      {
+        id: uuid(),
+        listName: "Todo",
+        todos: [{ content: "", id: uuid(), priority: 0, time: 0 }],
+      },
+      {
+        id: uuid(),
+        listName: "Doing",
+        todos: [{ content: "", id: uuid(), priority: 0, time: 0 }],
+      },
+      {
+        id: uuid(),
+        listName: "Done",
+        todos: [{ content: "", id: uuid(), priority: 0, time: 0 }],
+      },
+    ],
+  });
 
   const [draggingOverList, setDraggingOverList] = useState<string | null>();
   const [reorderLists, setReorderLists] = useState(false);
 
   useEffect(() => {
-    //hacky hack potentially dangerous hack
-    const handleNewDoc = () => {
-      setTodoSpace({
-        spaceName: "my todo space",
-        lists: [
-          {
-            id: uuid(),
-            listName: "Todo",
-            todos: [{ content: "", id: uuid(), priority: 0, time: 0 }],
-          },
-          {
-            id: uuid(),
-            listName: "Doing",
-            todos: [{ content: "", id: uuid(), priority: 0, time: 0 }],
-          },
-          {
-            id: uuid(),
-            listName: "Done",
-            todos: [{ content: "", id: uuid(), priority: 0, time: 0 }],
-          },
-        ],
-      });
-
-      setLoaded(true);
-    };
+    if (typeof vscode === "undefined") return setLoaded(true);
 
     const handleMessage = (e: MessageEvent) => {
-      if (e.data.type !== "load") return;
+      if (e.data.type !== "load") {
+        return;
+      }
+
+      setLoaded(true);
 
       const parsedMessage = TodoSpaceSchema.safeParse(JSON.parse(e.data.text));
 
@@ -62,11 +60,7 @@ function TodoSpace() {
         const message = parsedMessage.data;
 
         setTodoSpace(message);
-      } else {
-        handleNewDoc();
       }
-
-      setLoaded(true);
     };
 
     window.addEventListener("message", handleMessage);
@@ -79,23 +73,21 @@ function TodoSpace() {
   }, []);
 
   useEffect(() => {
+    if (typeof vscode === "undefined") return;
+
     if (loaded) {
       vscode.postMessage({
         type: "update",
         newData: todoSpace,
       });
-    } else {
-      vscode.postMessage({
-        type: "ready",
-      });
     }
   }, [todoSpace, loaded]);
 
-  if (!loaded || todoSpace === undefined) return <>loading...</>;
+  if (!loaded) return <>loading...</>;
 
   return (
     <div className="w-full h-full bg-black">
-      <div className="h-14 flex items-center bg-slate-800 text-white justify-between p-2">
+      <div className="h-14 flex items-center bg-slate-900 text-white justify-between p-2">
         <h1 className="font-2xl font-semibold">EasyTODO</h1>
         <div className="flex justify-end gap-4">
           <button
@@ -343,7 +335,7 @@ function TodoList(props: {
         opacity: isDraggingOver && reorderLists ? 0.9 : 1.0,
       }}
       draggable={reorderLists ? "true" : "false"}
-      className="p-4 w-fit h-fit rounded-md bg-slate-800 text-xl"
+      className="p-0 w-fit h-fit rounded-xl bg-slate-900 text-xl"
       onDragStart={(e: any) => {
         e.dataTransfer.setData(
           "text/plain",
@@ -368,7 +360,7 @@ function TodoList(props: {
         onDrop(id, type);
       }}
     >
-      <div className="flex flex-col gap-2 mb-4">
+      <div className="p-3 flex flex-col gap-2 mb-4">
         <div className="flex justify-between">
           <input
             defaultValue={listData.listName}
@@ -396,19 +388,19 @@ function TodoList(props: {
 
               setTodoListData(newState);
             }}
-            className="text-sm justify-center items-center aspect-square flex p-2 bg-blue-500 rounded-full font-semibold text-white"
+            className="text-sm justify-center items-center aspect-square flex p-3 bg-blue-500 rounded-full w-2 h-2 font-semibold text-white"
           >
             +
           </button>
           <button
             onClick={deleteList}
-            className="text-sm justify-center items-center aspect-square flex p-2 bg-red-400 rounded-full font-semibold text-white"
+            className="text-sm justify-center items-center aspect-square flex p-3 bg-red-400 rounded-full w-2 h-2 font-semibold text-white"
           >
             -
           </button>
         </div>
       </div>
-      <div className="p-3 bg-black rounded-md flex flex-col gap-3">
+      <div className="rounded-md p-3 flex flex-col gap-3">
         {listData.todos.map((todoData) => {
           return (
             <Todo
@@ -474,7 +466,7 @@ function Todo(props: {
   return (
     <motion.div
       draggable={reorderTodos ? "true" : "false"}
-      className="bg-slate-700 rounded-md p-2 h-fit flex gap-2 cursor-move"
+      className="bg-slate-700 rounded-md h-fit flex flex-col cursor-move"
       whileHover={{
         border: reorderTodos ? "1px solid white" : "0px solid white",
       }}
@@ -516,19 +508,7 @@ function Todo(props: {
         }
       }}
     >
-      <textarea
-        wrap="soft"
-        className="bg-transparent outline-none break overflow-visible break-words break-all"
-        onKeyDown={(e) => {
-          const newTodo = { ...todoData };
-
-          newTodo.content = e.currentTarget.value;
-
-          setTodo(newTodo);
-        }}
-        defaultValue={todoData.content}
-      ></textarea>
-      <div className="text-sm">
+      <div className="flex justify-between text-sm h-fit bg-slate-700 border-b-2 border-dotted border-slate-800 rounded-md p-1 items-center">
         <div className="flex">
           {[0, 1, 2].map((_label, index) => (
             <button
@@ -548,12 +528,12 @@ function Todo(props: {
             </button>
           ))}
         </div>
-        <div className="flex">
-          {[0, 1, 2].map((_label, index) => (
+        <div className="flex gap-1">
+          {["Minutes", "Hours", "Days", "Months"].map((label, index) => (
             <button
               key={uuid()}
               className={`${
-                todoData.time >= index ? "opacity-100" : "opacity-50"
+                todoData.time === index ? "opacity-100" : "opacity-50"
               }`}
               onClick={() => {
                 const newTodo = { ...todoData };
@@ -563,19 +543,33 @@ function Todo(props: {
                 setTodo(newTodo);
               }}
             >
-              ⏰
+              {label}
             </button>
           ))}
         </div>
+        <div>
+          <button
+            onClick={() => {
+              deleteTodo();
+            }}
+            className="text-sm justify-center items-center flex flex-row p-2 w-1 h-1 bg-red-400 rounded-full font-semibold text-white"
+          >
+            -
+          </button>
+        </div>
       </div>
-      <button
-        onClick={() => {
-          deleteTodo();
+      <textarea
+        wrap="soft"
+        className="p-1 bg-transparent outline-none break overflow-visible break-words break-all text-white"
+        onKeyDown={(e) => {
+          const newTodo = { ...todoData };
+
+          newTodo.content = e.currentTarget.value;
+
+          setTodo(newTodo);
         }}
-        className="text-sm justify-center items-center flex p-2 bg-red-400 rounded-md font-semibold text-white"
-      >
-        -
-      </button>
+        defaultValue={todoData.content}
+      ></textarea>
     </motion.div>
   );
 }
